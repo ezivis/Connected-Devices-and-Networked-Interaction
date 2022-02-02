@@ -1,44 +1,53 @@
-let serial;
-let portName = 'COM3';
-let inData; 
 let portSelector;
 let powerButton;
 let fanSlider;
+// variable for the serialport object:
+let serial;
+let portName = 'COM3'; 
+// previous state of the serial input from the button:
+let lastButtonState = 0;
 
-
-function preload() {
-  img = loadImage('5.png');
-}
-
+// this function is called when the page is loaded. 
+// element event listeners are  added here:
 function setup(event) {
+  // add listeners for the power button and the fan speed:
   powerButton = document.getElementById('power');
   powerButton.addEventListener('click', setPowerState);
 
   fanSlider = document.getElementById('fanSpeed');
-  fanSlider.addEventListener('change', setFanSpeed);  
-  createCanvas(1000, 1000);
-  serial = new p5.SerialPort();
-  serial.on('list', printList);
+  fanSlider.addEventListener('change', setFanSpeed);
+
+  // initialize the serialport object:
+  serial = new p5.SerialPort(); 
+  serial.on('list', printList); 
   serial.on('data', serialEvent); 
-  serial.list();
+  serial.list(); 
   serial.open(portName); 
-  
+
   setPowerState();
   setFanSpeed();
 }
 
+
+
 function setPowerState() {
+  // change its value, depending on its current value:
   if (powerButton.value == 'on') {
     powerButton.value = 'off';
   } else {
     powerButton.value = 'on';
   }
+  // get the span associated with it and change its text:
   let thisSpan = document.getElementById(powerButton.id + 'Val');
   thisSpan.innerHTML = "Switch is " + powerButton.value;
 }
 
 function setFanSpeed(e) {
+ // assume e is a number:
 var currentValue = e;
+// but if it's an object instead, it's because
+// the slider change event called this function. 
+// Extract the number from it:
   if (typeof e == 'object') {
     currentValue = e.target.value;
   } 
@@ -47,18 +56,51 @@ var currentValue = e;
   thisSpan.innerHTML ="Now the number is: " + currentValue;
 }
 
-function draw() {
-  image(img, 500, 150, inData, inData);
+// make a serial port selector object:
+function printList(portList) {
+  // create a select object:
+  portSelector = document.getElementById('portSelector');
+  // portList is an array of serial port names
+  for (var i = 0; i < portList.length; i++) {
+    // add this port name to the select object:
+    var option = document.createElement("option");
+    option.text = portList[i];
+    portSelector.add(option);
+  }
+  // set an event listener for when the port is changed:
+  portSelector.addEventListener('change', openPort);
 }
 
-function printList(portList) {
-  for (var i = 0; i < portList.length; i++) {
-    console.log(i + portList[i]);
+function openPort() {
+  let item = portSelector.value;
+  // if there's a port open, close it:
+  if (serial.serialport != null) {
+    serial.close();
+  }
+  // open the new port:
+  serial.open(item);
+}
+
+
+function serialEvent() {
+  // read a line of incoming data:
+  var inData = serial.readLine();
+  // if the line is not empty, parse it to JSON:
+  if (inData) {
+    var sensors = JSON.parse(inData);
+    // button value:
+    // if the button's changed and it's pressed, take action:
+    if (sensors.button !== lastButtonState) {
+      if (sensors.button === 0) {
+        setPowerState(sensors.button);
+      }
+      // save button value for next time:
+      lastButtonState = sensors.button;
+    }
+    // fan slider value:
+    setFanSpeed(sensors.knob);
   }
 }
- 
-function serialEvent() {
-  inData = Number(serial.read());
-  setFanSpeed(inData);
-}
- 
+
+// add a listener for the page to load:
+window.addEventListener('DOMContentLoaded', setup);
